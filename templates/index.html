@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animal Intrusion Detection — Field Station</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🐘 Field Detection Station</h1>
+    <a class="btn ghost" href="{{ url_for('farmer') }}">Go to Farmer Dashboard →</a>
+  </header>
+
+  <section class="card">
+    <h2>Upload Image</h2>
+    <input type="file" id="imageInput" accept="image/*">
+    <button class="btn" onclick="detectImage()">Detect Animals</button>
+  </section>
+
+  <section class="card">
+    <h2>Upload Video</h2>
+    <input type="file" id="videoInput" accept="video/mp4">
+    <button class="btn" onclick="detectVideo()">Process Video</button>
+    <p id="videoStatus" class="muted"></p>
+    <video id="outputVideo" controls style="display:none;max-width:100%;margin-top:10px;"></video>
+  </section>
+
+  <section class="card">
+    <h2>Live Webcam (Optional)</h2>
+    <button class="btn" onclick="toggleWebcam()" id="webcamBtn">Start Live Detection</button>
+    <div id="webcamWrap" style="display:none;margin-top:10px;">
+      <img id="webcamStream" src="" style="max-width:100%;border-radius:8px;">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Detection Result</h2>
+    <img id="resultImage" style="max-width:100%;display:none;border-radius:8px;">
+    <ul id="resultList"></ul>
+  </section>
+</div>
+
+<audio id="alarmSound" preload="auto"></audio>
+
+<script src="{{ url_for('static', filename='alarm.js') }}"></script>
+<script>
+async function detectImage() {
+  const input = document.getElementById('imageInput');
+  if (!input.files.length) { alert('Choose an image first.'); return; }
+  const fd = new FormData();
+  fd.append('image', input.files[0]);
+  const res = await fetch('/api/detect_image', { method: 'POST', body: fd });
+  const data = await res.json();
+  showResult(data);
+}
+
+async function detectVideo() {
+  const input = document.getElementById('videoInput');
+  if (!input.files.length) { alert('Choose a video first.'); return; }
+  document.getElementById('videoStatus').textContent = 'Processing video... this can take a minute.';
+  const fd = new FormData();
+  fd.append('video', input.files[0]);
+  const res = await fetch('/api/detect_video', { method: 'POST', body: fd });
+  const data = await res.json();
+  document.getElementById('videoStatus').textContent =
+    `Done. ${data.total_detections} detections found. Counts: ${JSON.stringify(data.counts)}`;
+  const vid = document.getElementById('outputVideo');
+  vid.src = data.output_video;
+  vid.style.display = 'block';
+  if (data.total_detections > 0) playAlarm();
+}
+
+function showResult(data) {
+  const img = document.getElementById('resultImage');
+  img.src = data.image;
+  img.style.display = 'block';
+  const list = document.getElementById('resultList');
+  list.innerHTML = '';
+  (data.detections || []).forEach(d => {
+    const li = document.createElement('li');
+    li.textContent = `${d.animal} — confidence ${(d.confidence * 100).toFixed(1)}%`;
+    list.appendChild(li);
+  });
+  if ((data.detections || []).length > 0) playAlarm();
+}
+
+let webcamOn = false;
+async function toggleWebcam() {
+  const btn = document.getElementById('webcamBtn');
+  const wrap = document.getElementById('webcamWrap');
+  const img = document.getElementById('webcamStream');
+  webcamOn = !webcamOn;
+  await fetch(`/api/webcam/${webcamOn ? 'start' : 'stop'}`, { method: 'POST' });
+  if (webcamOn) {
+    img.src = '/video_feed?' + Date.now();
+    wrap.style.display = 'block';
+    btn.textContent = 'Stop Live Detection';
+  } else {
+    img.src = '';
+    wrap.style.display = 'none';
+    btn.textContent = 'Start Live Detection';
+  }
+}
+</script>
+</body>
+</html>
