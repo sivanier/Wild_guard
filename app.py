@@ -177,13 +177,18 @@ def log_detection(animal, confidence, source, bbox=None, group_id=None):
         (animal, confidence, damage, source, timestamp, json.dumps(bbox) if bbox else None, group_id),
     )
     event_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    recent_count = conn.execute(
+        "SELECT COUNT(*) FROM (SELECT id FROM detections ORDER BY timestamp DESC, id DESC LIMIT 20)"
+    ).fetchone()[0]
     conn.commit()
     conn.close()
     event = {
         "id": event_id, "animal": animal, "confidence": round(float(confidence), 3),
         "est_damage": damage, "source": source, "timestamp": timestamp, "bbox": bbox,
     }
-    socketio.emit("detection", event, namespace="/farmer")
+    event["risk_severity"] = compute_risk_level(recent_count).lower()
+    for namespace in ("/field", "/farmer"):
+        socketio.emit("detection", event, namespace=namespace)
     return damage
 
 
@@ -397,6 +402,12 @@ def farmer():
 def farmer_socket_connect(auth=None):
     if not session.get("logged_in"):
         return False
+
+
+@socketio.on("connect", namespace="/field")
+def field_socket_connect(auth=None):
+    # The local detection station is intentionally available without farmer login.
+    return True
 
 
 def compute_risk_level(recent_count: int) -> str:

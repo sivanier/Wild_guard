@@ -37,8 +37,11 @@
   </section>
 
   <section class="card">
-    <h2>Live Notifications</h2>
-    <p id="connectionStatus" class="muted" role="status">Connecting to detection server…</p>
+    <div class="notification-heading">
+      <h2>Live Notifications</h2>
+      <button id="alertSoundToggle" class="btn ghost sound-toggle" type="button" aria-pressed="false">Enable alert sound</button>
+    </div>
+    <p id="connectionStatus" class="connection-status is-connecting" role="status">Connecting to detection server…</p>
     <ul id="notifications" aria-live="polite"></ul>
   </section>
 
@@ -64,10 +67,14 @@
   </p>
 </div>
 
+<div id="toastContainer" class="toast-container" aria-live="polite" aria-relevant="additions" aria-label="New animal detection alerts"></div>
+
 <audio id="alarmSound" preload="auto"></audio>
 
 <script src="{{ url_for('static', filename='alarm.js') }}"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script>window.DETECTION_SOCKET_NAMESPACE = '/farmer';</script>
+<script src="{{ url_for('static', filename='detection-alerts.js') }}"></script>
 <script>
 async function refresh() {
   const [statsRes, historyRes] = await Promise.all([
@@ -107,32 +114,18 @@ async function refresh() {
 }
 
 const statusEl = document.getElementById('connectionStatus');
-function showNotification(event) {
-  const item = document.createElement('li');
-  const confidence = `${(event.confidence * 100).toFixed(1)}%`;
-  const details = event.bbox ? ` · box ${event.bbox.join(', ')}` : '';
-  item.textContent = `${event.animal} detected (${confidence}) at ${event.timestamp} · ${event.source}${details}`;
-  document.getElementById('notifications').prepend(item);
-  while (item.parentElement.children.length > 10) item.parentElement.lastElementChild.remove();
-  playAlarm();
-}
-
 refresh().catch(error => { statusEl.textContent = `Unable to load dashboard: ${error.message}`; });
-if (typeof io === 'undefined') {
-  statusEl.textContent = 'Real-time client could not load. Check internet access to the Socket.IO client CDN and reload.';
-} else {
-  const socket = io('/farmer', { transports: ['websocket', 'polling'], reconnection: true, timeout: 10000 });
-  socket.on('connect', () => {
-    statusEl.textContent = 'Connected to detection server · live updates enabled';
-    refresh().catch(error => { statusEl.textContent = `Connected, but history refresh failed: ${error.message}`; });
-  });
-  socket.on('disconnect', () => { statusEl.textContent = 'Disconnected · reconnecting automatically…'; });
-  socket.on('connect_error', error => { statusEl.textContent = `Connection error: ${error.message}. Retrying…`; });
-  socket.on('detection', event => {
-    showNotification(event);
-    refresh().catch(error => { statusEl.textContent = `Live alert received; history refresh failed: ${error.message}`; });
-  });
-}
+window.addEventListener('detection-recorded', event => {
+  const detection = event.detail;
+  const item = document.createElement('li');
+  const severity = detection.risk_severity || 'low';
+  item.className = `notification-item severity-${severity}`;
+  item.textContent = `${detection.animal} · ${(detection.confidence * 100).toFixed(1)}% · ${detection.source} · ${new Date(detection.timestamp).toLocaleString()} · ${severity} risk`;
+  const list = document.getElementById('notifications');
+  list.prepend(item);
+  while (list.children.length > 20) list.lastElementChild.remove();
+  refresh().catch(error => { statusEl.textContent = `Live alert received; history refresh failed: ${error.message}`; });
+});
 </script>
 </body>
 </html>

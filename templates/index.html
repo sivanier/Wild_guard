@@ -13,6 +13,11 @@
     <a class="btn ghost" href="{{ url_for('farmer') }}">Go to Farmer Dashboard →</a>
   </header>
 
+  <section class="alert-status-bar" aria-label="Live alert connection controls">
+    <p id="connectionStatus" class="connection-status is-connecting" role="status">Connecting to live alerts…</p>
+    <button id="alertSoundToggle" class="btn ghost sound-toggle" type="button" aria-pressed="false">Enable alert sound</button>
+  </section>
+
   <section class="card">
     <h2>Upload Image</h2>
     <input type="file" id="imageInput" accept="image/*">
@@ -42,9 +47,14 @@
   </section>
 </div>
 
+<div id="toastContainer" class="toast-container" aria-live="polite" aria-relevant="additions" aria-label="New animal detection alerts"></div>
+
 <audio id="alarmSound" preload="auto"></audio>
 
 <script src="{{ url_for('static', filename='alarm.js') }}"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+<script>window.DETECTION_SOCKET_NAMESPACE = '/field';</script>
+<script src="{{ url_for('static', filename='detection-alerts.js') }}"></script>
 <script>
 async function detectImage() {
   const input = document.getElementById('imageInput');
